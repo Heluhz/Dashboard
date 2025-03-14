@@ -1,59 +1,86 @@
 import React, { useEffect, useState } from 'react';
-import { Line } from 'react-chartjs-2'; // For chart visualization
-import 'chart.js/auto'; // Ensure chart.js is loaded
-import AOS from 'aos'; // AOS for animations
-import 'aos/dist/aos.css'; // Import AOS CSS
+import { Line } from 'react-chartjs-2';
+import 'chart.js/auto';
+import AOS from 'aos';
+import 'aos/dist/aos.css';
+
+const API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY;
 
 const Dashboard = () => {
   const [location, setLocation] = useState('');
-  const [aqi, setAqi] = useState(null); // AQI value
-  const [healthAlert, setHealthAlert] = useState(''); // Health status
+  const [aqi, setAqi] = useState(null);
+  const [healthAlert, setHealthAlert] = useState('');
   const [airQualityData, setAirQualityData] = useState({
     labels: [],
     datasets: [],
   });
 
-  // Initialize AOS for animations
   useEffect(() => {
     AOS.init();
   }, []);
 
-  // Handle Search Location and Fetch Data from Backend
   const handleSearch = async () => {
     if (!location) {
       alert("Please enter a location");
       return;
     }
 
-    console.log('Searching for air quality in:', location);
-
     try {
-      // Make a GET request to your backend to fetch the air quality data based on the city/region
-      const response = await fetch(`https://openweathermap.org/api/air-pollution`);
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Air Quality Data:', data);
-        
-        // Update the state with the received data
-        setAqi(data.aqi);
-        setHealthAlert(data.healthAlert);
+      const geoResponse = await fetch(
+        `http://api.openweathermap.org/geo/1.0/direct?q=${location}&limit=1&appid=${API_KEY}`
+      );
 
-        // Assuming the backend also sends the data for trends
-        setAirQualityData({
-          labels: data.trends.labels, // Example: ['1 AM', '2 AM', '3 AM']
-          datasets: [
-            {
-              label: 'AQI Levels',
-              data: data.trends.data, // Example: [30, 45, 35]
-              fill: false,
-              borderColor: 'rgb(75, 192, 192)',
-              tension: 0.1,
-            },
-          ],
-        });
-      } else {
-        alert('City not found or error fetching data');
+      if (!geoResponse.ok) {
+        alert('City not found');
+        return;
       }
+
+      const geoData = await geoResponse.json();
+      if (geoData.length === 0) {
+        alert('Location not found');
+        return;
+      }
+
+      const { lat, lon } = geoData[0];
+
+      const aqiResponse = await fetch(
+        `http://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${API_KEY}`
+      );
+
+      if (!aqiResponse.ok) {
+        alert('Error fetching air quality data');
+        return;
+      }
+
+      const aqiData = await aqiResponse.json();
+      console.log('Air Quality Data:', aqiData);
+
+      const aqiValue = aqiData.list[0].main.aqi;
+
+      const healthMessages = [
+        'Good Air Quality',
+        'Fair Air Quality',
+        'Moderate Air Quality',
+        'Poor Air Quality',
+        'Very Poor Air Quality',
+      ];
+
+      setAqi(aqiValue);
+      setHealthAlert(healthMessages[aqiValue - 1]);
+
+      setAirQualityData({
+        labels: ['1 AM', '2 AM', '3 AM', '4 AM', '5 AM', '6 AM', '7 AM', '8 AM', '9 AM', '10 AM'],
+        datasets: [
+          {
+            label: 'AQI Levels',
+            data: Array.from({ length: 10 }, () => aqiValue * (Math.random() + 0.5)), // Simulated trend
+            fill: false,
+            borderColor: 'rgb(75, 192, 192)',
+            tension: 0.1,
+          },
+        ],
+      });
+
     } catch (error) {
       console.error('Error fetching data:', error);
       alert('Error fetching data');
@@ -62,7 +89,6 @@ const Dashboard = () => {
 
   return (
     <div>
-      {/* Location Search */}
       <section className="bg-gray-700 text-white py-8" data-aos="fade-up">
         <div className="container mx-auto text-center">
           <h2 className="text-4xl font-bold mb-6">Check Air Quality for Your Location</h2>
@@ -83,7 +109,6 @@ const Dashboard = () => {
         </div>
       </section>
 
-      {/* Current Air Quality */}
       <section className="bg-gray-900 text-white py-8" data-aos="fade-up" data-aos-delay="200">
         <div className="container mx-auto text-center">
           <h2 className="text-4xl font-bold mb-6">Current Air Quality</h2>
@@ -98,11 +123,10 @@ const Dashboard = () => {
         </div>
       </section>
 
-      {/* Air Quality Trends */}
       <section className="py-8" data-aos="fade-up" data-aos-delay="300">
         <div className="container mx-auto text-center">
           <h2 className="text-4xl font-bold mb-6">Air Quality Trends</h2>
-          {airQualityData.labels && airQualityData.datasets.length > 0 ? (
+          {airQualityData.labels.length > 0 ? (
             <Line data={airQualityData} />
           ) : (
             <p>Loading trends...</p>
@@ -110,7 +134,6 @@ const Dashboard = () => {
         </div>
       </section>
 
-      {/* Health Alerts */}
       {healthAlert && (
         <section className="bg-yellow-500 text-black py-8" data-aos="fade-up" data-aos-delay="400">
           <div className="container mx-auto text-center">
